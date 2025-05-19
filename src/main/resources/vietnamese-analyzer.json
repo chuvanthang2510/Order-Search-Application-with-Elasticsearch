@@ -1,13 +1,59 @@
 {
   "analysis": {
     "analyzer": {
-      "vietnamese": {
-        "type": "custom",
+      "vietnamese_analyzer": {
         "tokenizer": "standard",
+        "filter": [
+          "lowercase",
+          "asciifolding",
+          "vietnamese_stop",
+          "vietnamese_stemmer",
+          "vietnamese_normalization"
+        ]
+      },
+      "vietnamese_search_analyzer": {
+        "tokenizer": "standard",
+        "filter": [
+          "lowercase",
+          "asciifolding",
+          "vietnamese_stop",
+          "vietnamese_stemmer",
+          "vietnamese_normalization"
+        ]
+      },
+      "partial_match_analyzer": {
+        "tokenizer": "ngram_tokenizer",
         "filter": [
           "lowercase",
           "asciifolding"
         ]
+      }
+    },
+    "tokenizer": {
+      "ngram_tokenizer": {
+        "type": "ngram",
+        "min_gram": 2,
+        "max_gram": 10,
+        "token_chars": [
+          "letter",
+          "digit",
+          "symbol"
+        ]
+      }
+    },
+    "filter": {
+      "vietnamese_stop": {
+        "type": "stop",
+        "stopwords": "_vietnamese_"
+      },
+      "vietnamese_stemmer": {
+        "type": "stemmer",
+        "language": "vietnamese"
+      },
+      "vietnamese_normalization": {
+        "type": "icu_normalizer",
+        "name": "nfkc",
+        "mode": "compose"
       }
     }
   }
