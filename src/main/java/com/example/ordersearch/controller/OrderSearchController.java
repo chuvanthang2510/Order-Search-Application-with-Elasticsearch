@@ -44,4 +44,10 @@ public class OrderSearchController {
         }
     }
 
+    @PostMapping("/generate-data")
+    public ResponseEntity<String> generateData(@RequestParam(defaultValue = "1000000") int numberOfRecords) {
+        orderSearchService.generateFakeData(numberOfRecords);
+        return ResponseEntity.ok("Data generation completed");
+    }
+
 } 
