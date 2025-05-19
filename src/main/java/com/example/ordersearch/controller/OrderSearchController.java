@@ -19,16 +19,18 @@ public class OrderSearchController {
 
     @GetMapping("/search")
     public ResponseEntity<SearchResponse> searchOrders(
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date fromDate,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date toDate,
+            @RequestParam(required = false) String input,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "dd/MM/yyyy HH:mm:ss") Date fromDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "dd/MM/yyyy HH:mm:ss") Date toDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         
-        List<Order> results = orderSearchService.searchOrders(q, fromDate, toDate, page, size);
-        
+        List<Order> results = orderSearchService.searchOrders(input, fromDate, toDate, page, size);
+
         SearchResponse response = new SearchResponse();
         response.setOrders(results);
+        response.setTotal(results.stream().count());
+
         return ResponseEntity.ok(response);
     }
 } 
