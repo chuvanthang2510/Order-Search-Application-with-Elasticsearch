@@ -1,0 +1,15 @@
+spring:
+  main:
+    allow-circular-references: true
+  elasticsearch:
+    rest:
+      uris: http://localhost:9200
+    username: newadmin
+    password: 123456789
+server:
+  port: 8080
+
+logging:
+  level:
+    org.springframework.data.elasticsearch: DEBUG
+    org.elasticsearch: DEBUG
