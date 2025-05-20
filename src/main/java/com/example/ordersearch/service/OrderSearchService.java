@@ -33,6 +33,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderSearchService {
 
+    private static final int MAX_PAGE_SIZE = 1000;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_TOTAL_RESULTS = 1000;
+    private static final int SCROLL_SIZE = 5000;
+    private static final long SCROLL_TIMEOUT = 60000; // 1 minute
+
     private final OrderRepository orderRepository;
     private final ElasticsearchRestTemplate elasticsearchTemplate;
     private final RestHighLevelClient restHighLevelClient;
@@ -56,25 +62,26 @@ public class OrderSearchService {
     }
 
     public List<Order> searchOrders(String searchTerm, Date fromDate, Date toDate, int page, int size) {
+        // Validate and normalize input parameters
+        page = Math.max(0, page);
+        size = validateAndNormalizeSize(size);
+        
+        // Log search parameters
+        log.info("Searching orders with params: searchTerm={}, fromDate={}, toDate={}, page={}, size={}",
+                searchTerm, fromDate, toDate, page, size);
+
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
         
         if (searchTerm != null && !searchTerm.isEmpty()) {
             BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
             
-            // Kiểm tra nếu searchTerm là email
             if (searchTerm.contains("@")) {
-                // Tìm kiếm chính xác cho email
                 shouldQuery.should(QueryBuilders.termQuery("customerEmail.raw", searchTerm.toLowerCase()));
             } else {
-                // 1. Tìm kiếm chính xác cụm từ cho tên khách hàng
                 shouldQuery.should(QueryBuilders.matchPhraseQuery("customerName", searchTerm));
-                
-                // 2. Tìm kiếm chính xác cho các trường khác
                 shouldQuery.should(QueryBuilders.termQuery("code.raw", searchTerm));
                 shouldQuery.should(QueryBuilders.termQuery("bookingCode.raw", searchTerm));
                 shouldQuery.should(QueryBuilders.termQuery("phoneNumber.raw", searchTerm));
-                
-                // 3. Tìm kiếm một phần cho các trường khác
                 shouldQuery.should(QueryBuilders.matchQuery("code", searchTerm));
                 shouldQuery.should(QueryBuilders.matchQuery("bookingCode", searchTerm));
                 shouldQuery.should(QueryBuilders.matchQuery("phoneNumber", searchTerm));
@@ -84,7 +91,6 @@ public class OrderSearchService {
             boolQuery.must(shouldQuery);
         }
 
-        // Filter theo ngày
         if (fromDate != null || toDate != null) {
             RangeQueryBuilder dateRangeQuery = QueryBuilders.rangeQuery("orderDate");
             SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
@@ -104,16 +110,32 @@ public class OrderSearchService {
                 .withPageable(PageRequest.of(page, size))
                 .withSort(SortBuilders.scoreSort().order(SortOrder.DESC))
                 .withSort(SortBuilders.fieldSort("orderDate").order(SortOrder.DESC))
+                .withMaxResults(MAX_TOTAL_RESULTS)  // Giới hạn tổng số kết quả
                 .build();
 
         log.debug("Search query: {}", searchQuery.getQuery().toString());
         
         SearchHits<Order> searchHits = elasticsearchTemplate.search(searchQuery, Order.class);
-        log.debug("Total hits: {}", searchHits.getTotalHits());
+        long totalHits = searchHits.getTotalHits();
+        
+        // Log search results
+        log.info("Search completed with {} total hits", totalHits);
+
+        // Check if we hit the total hits limit
+        if (totalHits >= MAX_TOTAL_RESULTS) {
+            log.warn("Search results exceeded maximum limit of {}. Some results may be truncated.", MAX_TOTAL_RESULTS);
+        }
 
         return searchHits.stream()
                 .map(SearchHit::getContent)
                 .collect(Collectors.toList());
+    }
+
+    private int validateAndNormalizeSize(int size) {
+        if (size <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(size, MAX_PAGE_SIZE);
     }
 
     public void generateFakeData(int numberOfRecords) {

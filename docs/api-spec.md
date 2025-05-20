@@ -85,3 +85,7 @@ GET /api/orders/search?page=0&size=20
 - API hỗ trợ tìm kiếm tiếng Việt có dấu và không dấu
 - Kết quả tìm kiếm được phân trang để tối ưu hiệu suất
 - Thời gian tìm kiếm được định dạng theo chuẩn "dd/MM/yyyy HH:mm:ss" 
+- Có giới hạn kết quả trả về 
+    Nếu có 5000 kết quả phù hợp, chỉ 1000 kết quả đầu tiên sẽ được trả về
+    Người dùng có thể phân trang với kích thước trang tối đa là 1000
+    Hệ thống sẽ được bảo vệ khỏi việc trả về quá nhiều dữ liệu
