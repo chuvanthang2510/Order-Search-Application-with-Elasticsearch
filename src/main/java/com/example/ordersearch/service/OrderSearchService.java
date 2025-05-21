@@ -1,5 +1,8 @@
 package com.example.ordersearch.service;
 
+import com.example.ordersearch.common.H;
+import com.example.ordersearch.dto.SearchRequestMultiField;
+import com.example.ordersearch.dto.SearchResponse;
 import com.example.ordersearch.model.Order;
 import com.example.ordersearch.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,7 @@ import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -61,7 +65,77 @@ public class OrderSearchService {
         return str;
     }
 
-    public List<Order> searchOrders(String searchTerm, Date fromDate, Date toDate, int page, int size) {
+    public SearchResponse searchOrdersMultiField(SearchRequestMultiField request) {
+        int page = Math.max(0, request.getPage());
+        int size = validateAndNormalizeSize(request.getPageSize());
+
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+
+        // Tìm theo từng trường nếu có giá trị
+        if (H.isTrue(request.getId())) {
+            boolQuery.must(QueryBuilders.matchQuery("_id", request.getId()));
+        }
+
+        if (H.isTrue(request.getCode())) {
+            boolQuery.must(QueryBuilders.matchQuery("code", request.getCode()));
+        }
+
+        if (H.isTrue(request.getBookingCode())) {
+            boolQuery.must(QueryBuilders.matchQuery("bookingCode", request.getBookingCode()));
+        }
+
+        if (H.isTrue(request.getPhoneNumber())) {
+            boolQuery.must(QueryBuilders.matchQuery("phoneNumber", request.getPhoneNumber()));
+        }
+
+        if (H.isTrue(request.getCustomerName())) {
+            boolQuery.must(QueryBuilders.matchQuery("customerName", request.getCustomerName()));
+        }
+
+        if (H.isTrue(request.getCustomerEmail())) {
+            // Có thể dùng match hoặc term nếu muốn chính xác email
+            boolQuery.must(QueryBuilders.termQuery("customerEmail.raw", request.getCustomerEmail().toLowerCase()));
+        }
+
+        // Tìm theo khoảng thời gian
+        if (H.isTrue(request.getFromCreatedDate()) || H.isTrue(request.getToCreatedDate())) {
+            RangeQueryBuilder dateRangeQuery = QueryBuilders.rangeQuery("orderDate");
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+
+            if (H.isTrue(request.getFromCreatedDate())) {
+                dateRangeQuery.gte(sdf.format(request.getFromCreatedDate()));
+            }
+            if (H.isTrue(request.getToCreatedDate())) {
+                dateRangeQuery.lte(sdf.format(request.getToCreatedDate()));
+            }
+
+            boolQuery.must(dateRangeQuery);
+        }
+
+
+        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
+                .withQuery(boolQuery)
+                .withPageable(PageRequest.of(page, size))
+                .withSort(SortBuilders.scoreSort().order(SortOrder.DESC))
+                .withSort(SortBuilders.fieldSort("orderDate").order(SortOrder.DESC))
+                .build();
+
+
+        log.debug("Search query: {}", searchQuery.getQuery().toString());
+
+        SearchHits<Order> searchHits = elasticsearchTemplate.search(searchQuery, Order.class);
+
+        List<Order> orders = searchHits.stream()
+                .map(SearchHit::getContent)
+                .collect(Collectors.toList());
+
+        long total = searchHits.getTotalHits();
+
+        return new SearchResponse(orders, total);
+    }
+
+
+    public SearchResponse searchOrders(String searchTerm, Date fromDate, Date toDate, int page, int size) {
         // Validate and normalize input parameters
         page = Math.max(0, page);
         size = validateAndNormalizeSize(size);
@@ -110,7 +184,6 @@ public class OrderSearchService {
                 .withPageable(PageRequest.of(page, size))
                 .withSort(SortBuilders.scoreSort().order(SortOrder.DESC))
                 .withSort(SortBuilders.fieldSort("orderDate").order(SortOrder.DESC))
-                .withMaxResults(MAX_TOTAL_RESULTS)  // Giới hạn tổng số kết quả
                 .build();
 
         log.debug("Search query: {}", searchQuery.getQuery().toString());
@@ -126,9 +199,13 @@ public class OrderSearchService {
             log.warn("Search results exceeded maximum limit of {}. Some results may be truncated.", MAX_TOTAL_RESULTS);
         }
 
-        return searchHits.stream()
+        List<Order> orders = searchHits.stream()
                 .map(SearchHit::getContent)
                 .collect(Collectors.toList());
+
+        long total = searchHits.getTotalHits();
+
+        return new SearchResponse(orders, total);
     }
 
     private int validateAndNormalizeSize(int size) {

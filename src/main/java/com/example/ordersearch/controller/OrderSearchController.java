@@ -1,5 +1,6 @@
 package com.example.ordersearch.controller;
 
+import com.example.ordersearch.dto.SearchRequestMultiField;
 import com.example.ordersearch.dto.SearchResponse;
 import com.example.ordersearch.model.Order;
 import com.example.ordersearch.service.OrderSearchService;
@@ -30,13 +31,20 @@ public class OrderSearchController {
         try {
             log.debug("Searching with params: searchTerm={}, fromDate={}, toDate={}, page={}, size={}", 
                     searchTerm, fromDate, toDate, page, size);
-            
-            List<Order> results = orderSearchService.searchOrders(searchTerm, fromDate, toDate, page, size);
-            SearchResponse response = new SearchResponse();
-            response.setOrders(results);
-            response.setTotal(results.size());
-            
-            log.debug("Found {} results", results.size());
+
+            SearchResponse results = orderSearchService.searchOrders(searchTerm, fromDate, toDate, page, size);
+            return ResponseEntity.ok(results);
+        } catch (Exception e) {
+            log.error("Error searching orders", e);
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/searchMultiField")
+    public ResponseEntity<SearchResponse> searchOrders(@RequestBody SearchRequestMultiField request) {
+        try {
+            log.debug("Searching with request: {}", request);
+            SearchResponse response = orderSearchService.searchOrdersMultiField(request);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error searching orders", e);
